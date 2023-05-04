@@ -60,7 +60,7 @@ net ohmic-true   ohmicsense.ohmic-on    => plasmac.ohmic-probe
 author "Rod Webster";
 
 pin in  bit   is_probing                 "True if probing";
-pin in  float ohmic_low = 21             "The threshold volts below which ohmic sensing is set to be false";
+pin in  float ohmic_low = 5             "The threshold volts below which ohmic sensing is set to be false";
 pin in  float ohmic_threshold = 22       "The threshold volts above which ohmic sensing is set to be true";
 pin in  float thcad_0_volt_freq          "0 volt calibration data for THCAD card in Hz";
 pin in  float thcad_divide = 32          "THCAD divider set by links on THCAD board (1, 32, 64, or 128)";
@@ -70,6 +70,7 @@ pin in  float velocity_in                "The velocity returned from the THCAD a
 pin in  float volt_divider = 4.9         "The divide ratio";
 pin out bit   ohmic_on                   "True if ohmic circuit is closed (material is sensed)";
 pin out float ohmic_volts                "Calculated ohmic voltage";
+pin out float timefilter = 0                "Time filter";
 
 function _;
 license "GPL";
@@ -77,13 +78,25 @@ license "GPL";
 #include <rtapi_math.h>
 
 FUNCTION(_) {
-    double thcad_vel_scale = 1/((thcad_max_volt_freq - thcad_0_volt_freq)/thcad_fullscale/thcad_divide);
-    double thcad_scale_offset = thcad_0_volt_freq/thcad_divide;
+      double thcad_vel_scale = 1/((thcad_max_volt_freq - thcad_0_volt_freq)/thcad_fullscale/thcad_divide);
+      double thcad_scale_offset = thcad_0_volt_freq/thcad_divide;
 
-    ohmic_volts = (velocity_in - thcad_scale_offset) * thcad_vel_scale * volt_divider;
-    if(is_probing)
-        ohmic_on = (ohmic_volts >= ohmic_threshold ? 1 : 0);
-    else
-        if(ohmic_volts <= ohmic_low)
+      ohmic_volts = (velocity_in - thcad_scale_offset) * thcad_vel_scale * volt_divider;
+
+      if(is_probing){
+        if( timefilter>100){
+	        if( ohmic_volts > ohmic_threshold){
+	            ohmic_on = 1;
+	        } else {
+	            if( ohmic_volts < ohmic_low){
+                    ohmic_on = 0;
+                }
+            }
+        } else {
+           timefilter +=1;        
+        }
+      } else {
             ohmic_on = 0;
+            timefilter = 0;
+      }
 }
